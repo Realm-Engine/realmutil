@@ -1,0 +1,10 @@
+{
+	"authors": [
+		"Nathan"
+	],
+	"copyright": "Copyright © 2022, Nathan",
+	"description": "A minimal D application.",
+	"license": "proprietary",
+	"name": "realm-util",
+  "buildOptions" : ["unittests"]
+}
