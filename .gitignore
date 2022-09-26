@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/realm-util
+realm-util.so
+realm-util.dylib
+realm-util.dll
+realm-util.a
+realm-util.lib
+realm-util-test-*
+*.exe
+*.o
+*.obj
+*.lst
