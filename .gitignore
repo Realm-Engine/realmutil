@@ -13,3 +13,5 @@ realm-util-test-*
 *.o
 *.obj
 *.lst
+*.sln
+*.suo
