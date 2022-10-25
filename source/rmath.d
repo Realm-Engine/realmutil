@@ -115,13 +115,13 @@ version (D_SIMD)
 			mixin("return typeof(this)(vector" ~ op ~ "v);");
 		}
 
-		auto opBinary(string op)(typeof(this) v) const if(op != "*")
+		auto opBinary(string op)(typeof(this) v)
 		{
 			mixin("return typeof(this)(vector" ~ op ~ "v.vector);");
 
 		}
 
-		float opBinary(string op)(typeof(this)other) const if(op == "*")
+		float dot(typeof(this)other)
 		{
 			auto mul = this.vector * other.vector;
 			auto arr = mul.array;
@@ -148,6 +148,11 @@ version (D_SIMD)
 			}
 			return result;
 		}
+
+    ref T opIndex(int i)
+    {
+      return vector.ptr[i];
+    }
 
 		@property auto opDispatch(const string Swizzle)() const 
 				if (Swizzle.length <= NumComponents && Swizzle.length > 1)
@@ -209,9 +214,6 @@ version (D_SIMD)
 
     void toString(scope void delegate(const(char)[]) sink, FormatSpec!char fmt) const
     {
-      
-      
-
       if(fmt.spec == 'v')
       {
         if(fmt.width > 0)
@@ -239,6 +241,23 @@ version (D_SIMD)
           }
          
         }
+        else
+        {
+           for(int i = 0; i < NumComponents;i++)
+            {
+
+              static if(isFloatingPoint!T)
+              {
+                
+                sink("%f ".format(data[i]));
+
+              }
+              else static if(isIntegral!T)
+              {
+                sink("%d".format(data[i]));
+              }
+            }
+        }
       }
       else if(fmt.flPlus)
       {
@@ -256,17 +275,14 @@ version (D_SIMD)
 				result += v[i];
 			}
 			return sqrt(result);
-
-
 		}
-
-		
-
 	}
 
 	
 	public alias vec4 = Alias!(Vector!(float, 4));
 	public alias vec3 = Alias!(Vector!(float,3));
+  public alias vec2 = Alias!(Vector!(float,2));
+  
 	unittest
 	{
 		static assert(NextMultiple!(12, 16) == 16);
@@ -299,8 +315,7 @@ version (D_SIMD)
 		vec4 vf = vec4(1.0) + 1.0;
 		assert(vf == vec4(2.0));
 		assert(vf * 2.0 == vec4(4.0));
-		
-
+	
 	}
 
 	unittest
@@ -328,9 +343,18 @@ version (D_SIMD)
 		vec3 v1 = vec3(1.0f,2.0f,3.0f);
 		vec3 v2 = vec3(4.0f,5.0f,6.0f);
 		const float expected = 32.0f;
-		float actual = v1 * v2;
+		float actual = v1.dot(v2);
 		assert(isClose(actual,expected),"Expected ~ %f, got %f".format(expected,actual));
 	}
+
+  unittest
+  {
+    vec4 v1 = vec4(2.0);
+    vec4 v2 = vec4(2.0);
+    vec4 expected = vec4(4.0);
+    vec4 actual = v1 * v2;
+    assert(expected == actual,"Expected %4.v, got %4.v".format(expected,actual));
+  }
 
 	unittest
 	{
@@ -350,7 +374,8 @@ version (D_SIMD)
 	{
 		alias VectorType = Vector!(T,Columns);
 		private Vector!(T,Columns)[Rows] matrix;
-		
+		public enum NumRows = Rows;
+    public enum NumColumns = Columns;
 		private void makeMatrix(int x,int y, Type, Tail...)(Type head, Tail tail)
 		{
 			static if(is(Type == Vector!(T,Columns)))
@@ -366,8 +391,19 @@ version (D_SIMD)
 			{
 				
 			}
+      
 
 		}
+
+    @property T[NumColumns][NumRows] data()
+    {
+      typeof(return) result;
+      for(int r = 0; r < NumRows;r++)
+      {
+        result[r] = matrix[r].data.array;
+      }
+      return result;
+    }
 
 
 		this(Args...)(Args args)
@@ -383,6 +419,27 @@ version (D_SIMD)
 		
 		}
 
+    static typeof(this) identity()
+    {
+      typeof(this) matrix = typeof(this)(0);
+      static if(__traits(isFloating,T))
+      {
+        for(int i = 0; i < NumRows;i++)
+        {
+          matrix[i,i] = 1.0f;
+        }
+      }
+      else static if(__traits(isIntegral,T))
+      {
+        for(int i = 0; i < NumRows;i++)
+        {
+          matrix[i,i] = 1;
+        }
+      }
+      return matrix;
+      
+    }
+
 		@property auto ref opDispatch(const string Op)() if(Op.length == 1)
 		{
 			static foreach (Component; EnumMembers!(ComponentNames))
@@ -397,10 +454,105 @@ version (D_SIMD)
 			}
 		}
 
-		
+    auto opBinary(string op,ST)(ST scalar) if(op == "*" && __traits(isScalar,ST))
+    {
+      typeof(this) product;
+      for(int r = 0; r < NumRows;r++)
+      {
+        auto rP = this[r] * scalar;
+        product[r] = rP; 
+      }
+      return product;
+    }
+
+    Matrix!(T,NumRows,MT.NumColumns) opBinary(string op, MT)(MT other) if(op == "*"  && !__traits(isScalar,MT) &&NumColumns == MT.NumRows)
+    {
+      Matrix!(T,NumRows,MT.NumColumns) product;
+      auto bT = other.transposed;
+    
+      for(int r = 0; r < NumRows;r++)
+      {
+      
+        for(int c = 0; c < MT.NumColumns;c++)
+        {
+          auto rP = this[r] * bT[c];
+          float sum = 0;
+          
+          for(int i = 0; i < NumColumns;i++)
+          {
+            sum += rP[i];
+          }
+          product[r,c] = sum;
+        }
+
+      }
+      return product;
+    }
+
+    ref T opIndex(int i, int j)
+    {
+      return matrix[i][j];
+    }
+    ref Vector!(T,NumColumns) opIndex(int i)
+    {
+      return matrix[i];
+    }
+
+    auto transposed()
+    {
+      Matrix!(T,NumColumns,NumRows) result;
+      for(int x = 0; x < NumColumns; x++)
+      {
+        for(int y = 0; y < NumRows;y++)
+        {
+          result[x,y] = data[y][x]; 
+        }
+      }
+      return result;
+    }
+
+    void toString(scope void delegate(const(char)[]) sink, FormatSpec!char fmt) const
+    {
+      if(fmt.spec == 'm')
+      {
+        if(fmt.width > 0)
+        {
+          if(fmt.width <= NumRows)
+          {
+            for(int i = 0; i < fmt.width;i++)
+            {
+
+              static if(isFloatingPoint!T)
+              {
+                
+                sink("%v\n".format(matrix[i]));
+
+              }
+              else static if(isIntegral!T)
+              {
+                sink("%v\n".format(matrix[i]));
+              }
+            }
+          }
+          else
+          {
+            sink("Can not print %d rows from %d component rows".format(fmt.width,NumRows));
+          }
+         
+        }
+      }
+      else if(fmt.flPlus)
+      {
+        writefln("%d",1);
+      }
+    }
+
+
+
 
 	}
 	alias mat4 = Alias!(Matrix!(float,4,4));
+  alias mat2 = Alias!(Matrix!(float,2,2));
 	unittest
 	{
 		mat4 mat = mat4(vec4(1.0),vec4(1.0),vec4(1.0),vec4(1.0));
@@ -414,6 +566,51 @@ version (D_SIMD)
 		assert(mat.x.x == 2.0f);
 
 	}
+
+  unittest
+  {
+    mat4 mat1 = mat4(1.0f);
+    mat4 mat2 = mat4(2.0f);
+    mat4 result = mat1 * mat2;
+    writeln("%4.m".format(result));
+
+
+  }
+  unittest
+  {
+    Matrix!(float, 3,3) matrix1 = Matrix!(float,3,3)(vec3(1.0f,2.0f,1.0f),vec3(0.0f,1.0f,0.0f),vec3(2.0f,3.0f,4.0f));
+    Matrix!(float,3,2) matrix2 = Matrix!(float,3,2)(vec2(2.0f,5.0f),vec2(6.0f,7.0f),vec2(1.0f,8.0f));
+    Matrix!(float,3,2) result = matrix1 * matrix2;
+    writeln("A:\n%3.m".format(matrix1));
+    writeln("B:\n%2.m".format(matrix2.transposed));
+    writeln("%3.m".format(result));
+  }
+  unittest
+  {
+    mat2 mat = mat2(vec2(1.0f,2.0f),vec2(3.0f,4.0f));
+    mat2 transpos = mat.transposed();
+    mat2 expected = mat2(vec2(1.0f,3.0f),vec2(2.0f,4.0f)); 
+
+    
+    assert(transpos == expected, "Expected: \n%2.m, got: \n%2.m".format(expected,transpos));
+  
+    
+  }
+  unittest
+  {
+    Matrix!(float,3,2) matrix = Matrix!(float,3,2)(vec2(1.0f,2.0f),vec2(3.0f,4.0f),vec2(5.0f,6.0f));
+    Matrix!(float,2,3) transposed = matrix.transposed();
+    Matrix!(float,2,3) expected = Matrix!(float,2,3)(vec3(1.0f,3.0f,5.0f),vec3(2.0f,4.0f,6.0f));
+    assert(transposed == expected,"Expected: \n%2.m, got: \n %2.m".format(expected,transposed));
+  }
+
+  unittest
+  {
+    mat4 matrix = mat4.identity();
+    matrix = matrix * 5.0f;
+     
+    writeln("%4.m".format(matrix));
+  }
 
 }
 else
