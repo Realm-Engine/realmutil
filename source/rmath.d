@@ -465,6 +465,22 @@ version (D_SIMD)
       return product;
     }
 
+    Vector!(T,NumRows) opBinary(string op)(Vector!(T,NumColumns) other) if (op == "*" )
+    {
+      typeof(return) product;
+      for(int r = 0; r < NumRows;r++)
+      {
+        auto rp = this[r] * other;
+        T sum;
+        for(int i = 0; i < NumColumns;i++)
+        {
+          sum += rp[i];
+        }
+        product[r] = sum;
+      }
+      return product;
+    }
+
     Matrix!(T,NumRows,MT.NumColumns) opBinary(string op, MT)(MT other) if(op == "*"  && !__traits(isScalar,MT) &&NumColumns == MT.NumRows)
     {
       Matrix!(T,NumRows,MT.NumColumns) product;
@@ -610,6 +626,13 @@ version (D_SIMD)
     matrix = matrix * 5.0f;
      
     writeln("%4.m".format(matrix));
+  }
+  unittest
+  {
+    Matrix!(float,2,3 ) matrix = Matrix!(float,2,3)(vec3(1.0f,-1.0f,2.0f),vec3(0.0f,-3.0f,1.0f));
+    Vector!(float,3) vec = Vector!(float,3)(2.0f,1.0f,0.0f);
+    Vector!(float,2) result = matrix * vec;
+    printf("%2.v",result);
   }
 
 }
