@@ -148,6 +148,18 @@ version (D_SIMD)
 
 			}
 		}
+		static if(N==2)
+		{
+			float cross(typeof(this) other) const
+			{
+				return  (this.x*other.y) - (this.y*other.x);
+				
+			}
+			Vector!(T,N) orthogonal() const
+			{
+				return typeof(this)(this.y,-this.x);
+			}
+		}
 
 
 
@@ -285,7 +297,7 @@ version (D_SIMD)
       }
     }
 
-		public float magnitude()
+		public float magnitude() const
 		{
 			auto squared = vector * vector;
 			auto v = squared.array;
@@ -296,16 +308,32 @@ version (D_SIMD)
 			}
 			return sqrt(result);
 		}
+		typeof(this) normalized() const
+		{
+			//typeof(this) result;
+			float magintude = this.magnitude();
+			return this * (1/magintude);
+		}
 
 		Matrix!(T,N,1) opCast(T: Matrix!(T,N,1))()
 		{
 			return Matrix!(T,N,1).fromVector(this);
 		}
 
-
-
 		
 
+		static if(N < 4 && N > 0)
+		{	
+			Vector!(T,N+1) opCast(RT:Vector!(T,N+1))()
+			{
+				typeof(return) result;
+				for(int i = 0; i < N;i++)
+				{
+					result[i] = this[i];
+				}
+				return result;
+			}
+		}
 
 	}
 
@@ -741,6 +769,13 @@ version (D_SIMD)
 	
 	vec3 v = cast(vec3)cM;
 	writefln("%3.v",v);
+  }
+  unittest
+  {
+	vec2 v1 = vec2(0.7f,0.1f);
+	vec2 v2 = vec2(0.0f,1.0f);
+	writefln("%f",v1.cross(v2));
+	writefln("%2.v",v1.orthogonal);
   }
   
 }
