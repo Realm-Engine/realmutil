@@ -134,6 +134,24 @@ version (D_SIMD)
 
 		}
 
+		static if(N==3)
+		{
+			Vector!(T,N) cross(typeof(this) other) 
+			{
+				alias VType = Alias!(Vector!(T,N));
+				Vector!(T,N) result;
+				Matrix!(T,N,N) matrix = Matrix!(T,N,N)(Vector!(T,N)(cast(T)0,-this[2],this[1]),Vector!(T,N)(this.z,cast(T)0,-this[0]),Vector!(T,N)(-this[1],this[0],cast(T)0));
+				auto colMatrix = cast(Matrix!(T,N,1))other;
+				auto product = matrix * colMatrix;
+				result = cast(Vector!(T,N))product;
+				return result;
+
+			}
+		}
+
+
+
+
 		bool opEquals(typeof(this) other) const
 		{
 			bool result = true;
@@ -149,13 +167,15 @@ version (D_SIMD)
 			return result;
 		}
 
-    ref T opIndex(int i)
-    {
-      return vector.ptr[i];
-    }
+		
+
+    	ref T opIndex(int i)
+    	{
+      		return vector.ptr[i];
+    	}
 
 		@property auto opDispatch(const string Swizzle)() const 
-				if (Swizzle.length <= NumComponents && Swizzle.length > 1)
+		if (Swizzle.length <= NumComponents && Swizzle.length > 1)
 		{
 			import std.conv;
 
@@ -276,12 +296,25 @@ version (D_SIMD)
 			}
 			return sqrt(result);
 		}
+
+		Matrix!(T,N,1) opCast(T: Matrix!(T,N,1))()
+		{
+			return Matrix!(T,N,1).fromVector(this);
+		}
+
+
+
+		
+
+
 	}
+
+	
 
 	
 	public alias vec4 = Alias!(Vector!(float, 4));
 	public alias vec3 = Alias!(Vector!(float,3));
-  public alias vec2 = Alias!(Vector!(float,2));
+  	public alias vec2 = Alias!(Vector!(float,2));
   
 	unittest
 	{
@@ -375,16 +408,16 @@ version (D_SIMD)
 		alias VectorType = Vector!(T,Columns);
 		private Vector!(T,Columns)[Rows] matrix;
 		public enum NumRows = Rows;
-    public enum NumColumns = Columns;
+    	public enum NumColumns = Columns;
 		private void makeMatrix(int x,int y, Type, Tail...)(Type head, Tail tail)
 		{
 			static if(is(Type == Vector!(T,Columns)))
 			{
 				matrix[y] = head;
-        static if(y + 1 < Rows)
-        {
-          	makeMatrix!(x,y + 1)(tail); 
-        }
+        		static if(y + 1 < Rows)
+        		{
+          			makeMatrix!(x,y + 1)(tail); 
+        		}
 			
 			}
 			else static if(isStaticArray!(Type))
@@ -406,7 +439,7 @@ version (D_SIMD)
     }
 
 
-		this(Args...)(Args args)
+	this(Args...)(Args args)
 		{
 			makeMatrix!(0,0)(args);
 		}
@@ -465,43 +498,62 @@ version (D_SIMD)
       return product;
     }
 
-    Vector!(T,NumRows) opBinary(string op)(Vector!(T,NumColumns) other) if (op == "*" )
-    {
-      typeof(return) product;
-      for(int r = 0; r < NumRows;r++)
-      {
-        auto rp = this[r] * other;
-        T sum;
-        for(int i = 0; i < NumColumns;i++)
-        {
-          sum += rp[i];
-        }
-        product[r] = sum;
-      }
-      return product;
-    }
+	
+
+	private Matrix!(T,NumRows,1) matrixColMatrixProduct( MT)(MT colMatrix) if(MT.NumColumns == 1 && MT.NumRows == NumColumns)
+	{
+		//Matrix!(T,1,NumColumns) rowMatrix = colMatrix.transposed;
+		Vector!(T,NumColumns) rowMatrix;
+		int r,c;
+		for(r = 0; r < MT.NumRows;r++)
+		{
+			rowMatrix[r] = colMatrix[r,0];
+		}
+		
+		Matrix!(T,NumRows,1) result;
+		for(r = 0;r < NumRows;r++)
+		{
+			auto row = this[r];
+			float d = row.dot(rowMatrix);
+			
+			result[r,0] = d;
+
+
+		}
+		return result;
+
+	}
 
     Matrix!(T,NumRows,MT.NumColumns) opBinary(string op, MT)(MT other) if(op == "*"  && !__traits(isScalar,MT) &&NumColumns == MT.NumRows)
     {
-      Matrix!(T,NumRows,MT.NumColumns) product;
-      auto bT = other.transposed;
-    
-      for(int r = 0; r < NumRows;r++)
-      {
-      
-        for(int c = 0; c < MT.NumColumns;c++)
-        {
-          auto rP = this[r] * bT[c];
-          float sum = 0;
-          
-          for(int i = 0; i < NumColumns;i++)
-          {
-            sum += rP[i];
-          }
-          product[r,c] = sum;
-        }
 
-      }
+      	Matrix!(T,NumRows,MT.NumColumns) product;
+      	
+		static if(MT.NumColumns == 1)
+		{
+			product = matrixColMatrixProduct(other);
+		}
+		else
+		{
+			auto bT = other.transposed;
+      		for(int r = 0; r < NumRows;r++)
+      		{
+      
+        		for(int c = 0; c < MT.NumColumns;c++)
+        		{
+          			auto rP = this[r] * bT[c];
+          			float sum = 0;
+          
+          			for(int i = 0; i < NumColumns;i++)
+          			{
+            			sum += rP[i];
+          			}
+          			product[r,c] = sum;
+        		}
+
+      		}
+		}
+		
       return product;
     }
 
@@ -563,19 +615,51 @@ version (D_SIMD)
       }
     }
 
+	static Matrix!(T,M,1)fromVector(T,int M)(Vector!(T,M) vector)
+	{
+		Matrix!(T,M,1) result;
+		int i,j;
+		for(i = 0; i < M;i++)
+		{
+			result[i][0] = vector[i];
+		}
+		return result;
+	}
+
+	
+	Vector!(T,NumRows) opCast(RT:Vector!(T,NumRows))() if(NumColumns == 1)
+	{
+		Vector!(T,NumRows) result;
+		for(int r = 0; r<NumRows;r++)
+		{
+			
+			result[r] = this[r,0];
+		}
+		return result;
+	}
+	Vector!(T,NumRows) opCast(RT:Vector!(T,NumRows))() if(NumRows == 1)
+	{
+		Vector!(T,NumRows) result;
+		for(int r = 0; r<NumColumns;r++)
+		{
+			result[r] = this[0,r];
+		}
+		return result;
+	}
 
 
 
 	}
 	alias mat4 = Alias!(Matrix!(float,4,4));
-  alias mat2 = Alias!(Matrix!(float,2,2));
+  	alias mat2 = Alias!(Matrix!(float,2,2));
+	alias ColumnMatrix(int M) = Alias!(Matrix!(float,M,1));
 	unittest
 	{
 		mat4 mat = mat4(vec4(1.0),vec4(1.0),vec4(1.0),vec4(1.0));
 		assert(mat.x == vec4(1.0f));
-    assert(mat.y == vec4(1.0f));
-    assert(mat.z == vec4(1.0f));
-    assert(mat.w == vec4(1.0f));
+    	assert(mat.y == vec4(1.0f));
+    	assert(mat.z == vec4(1.0f));
+    	assert(mat.w == vec4(1.0f));
 		mat = mat4(1.0f);
 		assert(mat.x == vec4(1.0f));
 		mat.x.x = 2.0f;
@@ -627,14 +711,38 @@ version (D_SIMD)
      
     writeln("%4.m".format(matrix));
   }
+
   unittest
   {
-    Matrix!(float,2,3 ) matrix = Matrix!(float,2,3)(vec3(1.0f,-1.0f,2.0f),vec3(0.0f,-3.0f,1.0f));
-    Vector!(float,3) vec = Vector!(float,3)(2.0f,1.0f,0.0f);
-    Vector!(float,2) result = matrix * vec;
-    printf("%2.v",result);
+	vec4 vec = vec4(1.0f);
+	ColumnMatrix!(4) mat = ColumnMatrix!(4).fromVector(vec);
+	writeln("%4.m".format(mat));
+  }
+  unittest
+  {
+	Matrix!(float,2,3) mat = Matrix!(float,2,3)(vec3(1.0f,-1.0f,2.0f),vec3(0.0f,-3.0f,1.0f));
+	vec3 vec = vec3(2.0f,1.0f,0.0f);
+	ColumnMatrix!(3) colMat = cast(ColumnMatrix!(3))vec;
+	auto product = mat * colMat;
+	writeln("%2.m".format(product));
   }
 
+  unittest
+  {
+	vec3 v1 = vec3(1.0f,0.0f,0.0f);
+	vec3 v2 = vec3(0.0f,0.0f,1.0f);
+	vec3 result = v1.cross(v2);
+	writefln("%3.v",result);
+	assert(result == vec3(0.0f,-1.0f,0.0f));
+  }
+  unittest
+  {
+	ColumnMatrix!(3) cM = ColumnMatrix!(3)().fromVector(vec3(1.0f,1.0f,1.0f));
+	
+	vec3 v = cast(vec3)cM;
+	writefln("%3.v",v);
+  }
+  
 }
 else
 {
