@@ -112,13 +112,13 @@ version (D_SIMD)
             mixin("return typeof(this)(vector" ~ op ~ "v);");
         }
 
-        auto opBinary(string op)(typeof(this) v)
+        auto opBinary(string op)(typeof(this) v) const
         {
             mixin("return typeof(this)(vector" ~ op ~ "v.vector);");
 
         }
 
-        float dot(typeof(this) other)
+        float dot(typeof(this) other) const
         {
             auto mul = this.vector * other.vector;
             auto arr = mul.array;
@@ -133,7 +133,7 @@ version (D_SIMD)
 
         static if (N == 3)
         {
-            Vector!(T, N) cross(typeof(this) other)
+            Vector!(T, N) cross(typeof(this) other) const
             {
                 alias VType = Alias!(Vector!(T, N));
                 Vector!(T, N) result;
@@ -177,7 +177,7 @@ version (D_SIMD)
             return result;
         }
 
-        ref T opIndex(int i)
+        ref T opIndex(int i) const
         {
             return vector.ptr[i];
         }
@@ -329,7 +329,17 @@ version (D_SIMD)
                 }
                 return result;
             }
+
+			
         }
+		static if(N <= 4 && N > 2)
+		{
+			Vector!(T,N - 1) opCast(RT: Vector!(T,N-1))()
+			{
+				typeof(return) result = makeVector!(0)(this.data[0..N-1]);
+				return result;
+			}
+		}
 
     }
 
@@ -784,7 +794,84 @@ version (D_SIMD)
 
     struct Quaternion(QT)
 	{
-        private Vector!(T,4) vector;
+		static assert(__traits(isFloating,QT),"Quaternion types must be floating point");
+        public Vector!(QT,3) vector;
+		public QT scalar;
+
+		
+
+
+		this(Args...)(Args args)
+		{
+			makeQuaternion!0(args);
+		}
+		private void makeQuaternion(int i, Type, Tail...)(Type head, Tail tail)
+		{
+			static if(i < 3)
+			{
+				static if(is(Type==QT))
+				{
+					vector.makeVector!(i)(head,tail);
+					static if(i+1 < 4)
+					{
+						makeQuaternion!(i+1)(tail);
+					}
+
+				}
+				static if(is(Type == Vector!(QT,3)))
+				{
+					vector = head;
+					makeQuaternion!(i + 3)(tail);
+				}
+
+			}
+			else 
+			{
+				static if(is(Type==QT))
+				{
+					scalar = head;
+				}
+				
+			}
+		}
+		@property auto opDispatch(const string Swizzle)() const 
+                if (Swizzle.length > 1)
+        {
+			return vector.opDispatch!(Swizzle)();
+		}
+
+
+		void toString(scope void delegate(const(char)[]) sink, FormatSpec!char fmt) const
+        {
+			if(fmt.spec == 'q')
+			{
+				sink("%3.v %f".format(vector,scalar));
+			}
+			
+		}
+
+		auto opBinary(string op)(typeof(this) other) const if(op == "*") 
+		{
+
+			Vector!(QT,3) vectorPart = vector.cross(other.vector) + (vector * scalar) + ( other.vector * other.scalar);
+			QT scalarPart = (other.scalar * this.scalar) - this.vector.dot(other.vector);
+			typeof(this) result = typeof(this)(vectorPart,scalarPart);
+			return result; 
+		}
+
+
+
+	}
+
+	alias quat = Alias!(Quaternion!(float));
+
+	unittest
+	{
+		quat q = quat(2.0f,0.0f,0.0f,1.0f);
+		quat q2 = quat(1.0f,0.0f,1.0f,1.0f);
+		quat product = q * q2;
+		writefln("%q",product);
+
 
 	}
 
