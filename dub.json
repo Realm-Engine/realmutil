@@ -6,17 +6,8 @@
 	"description": "A minimal D application.",
 	"license": "proprietary",
 	"name": "realm-util",
-  	
-	"configurations": [
-		{
-			"name":"library",
-			"targetType": "library"
-		},
-		{
-			"name":"tests",
-			"buildOptions" : ["unittests"]
-		}
-	],
-  	
-  	"targetPath": "./bin/"
+	"targetType": "sourceLibrary",
+	
+
+	"targetPath": "./bin/"
 }
